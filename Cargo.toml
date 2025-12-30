@@ -1,0 +1,56 @@
+[package]
+name = "openai-auth"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = ["Viktor Gal <viktor@query.mt>"]
+license = "MIT"
+description = "OpenAI/ChatGPT OAuth 2.0 authentication with PKCE - sync and async APIs"
+repository = "https://github.com/querymt/openai-auth"
+keywords = ["openai", "oauth", "authentication", "chatgpt", "pkce"]
+categories = ["authentication", "api-bindings"]
+readme = "README.md"
+
+[features]
+default = ["async", "browser"]
+blocking = ["reqwest/blocking"]
+async = ["reqwest/default"]
+browser = ["webbrowser"]
+callback-server = ["async", "axum", "tower", "tokio"]
+full = ["blocking", "async", "browser", "callback-server"]
+
+[dependencies]
+oauth2 = { version = "5.0", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2"
+jsonwebtoken = "9"
+base64 = "0.22"
+rand = "0.8"
+webbrowser = { version = "1.0", optional = true }
+axum = { version = "0.8", optional = true }
+tower = { version = "0.5", optional = true }
+tokio = { version = "1", optional = true, features = ["macros", "rt-multi-thread", "net"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+keyring = "3.6"
+
+[[example]]
+name = "01_basic_manual_sync"
+required-features = ["blocking"]
+
+[[example]]
+name = "02_with_browser_sync"
+required-features = ["blocking", "browser"]
+
+[[example]]
+name = "03_basic_manual_async"
+required-features = ["async"]
+
+[[example]]
+name = "04_callback_server"
+required-features = ["async", "browser", "callback-server"]
