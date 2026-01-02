@@ -9,7 +9,7 @@
 //!
 //! Run with: cargo run --example 04_callback_server
 
-use openai_auth::{open_browser, run_callback_server, OAuthClient, OAuthConfig, Result};
+use openai_auth::{OAuthClient, OAuthConfig, Result, open_browser, run_callback_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {

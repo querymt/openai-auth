@@ -13,6 +13,7 @@ Provides both **synchronous** (blocking) and **asynchronous** (runtime-agnostic)
 - ✅ **Browser Integration** - Auto-open browser for authorization (default enabled)
 - ✅ **Callback Server** - Optional local server for automatic callback handling
 - ✅ **JWT Utilities** - Extract ChatGPT account ID from access tokens
+- ✅ **API Key Exchange** - Exchange id_token for OpenAI API key (Codex CLI flow)
 - ✅ **No Token Storage** - You control how/where to persist tokens
 
 ## Installation
@@ -111,12 +112,33 @@ See the `examples/` directory for complete working examples:
 - `02_with_browser_sync.rs` - Sync with browser auto-open
 - `03_basic_manual_async.rs` - Basic async flow
 - `04_callback_server.rs` - Full automation with callback server
+- `05_id_token_sync.rs` - Exchange the code for an API key (blocking)
+- `06_callback_custom_html.rs` - Callback server with custom HTML responses
 
 Run examples with:
 
 ```bash
 cargo run --example 01_basic_manual_sync
 cargo run --example 04_callback_server --features full
+cargo run --example 05_id_token_sync --features blocking
+cargo run --example 06_callback_custom_html --features full
+```
+
+## Custom Callback HTML
+
+You can provide a custom HTML responder for the callback server:
+
+```rust
+use openai_auth::{run_callback_server_with_html, CallbackEvent};
+
+let html = |event: CallbackEvent| match event {
+    CallbackEvent::Success { .. } => "<html>OK</html>".to_string(),
+    CallbackEvent::Error { reason } => format!("<html>Error: {}</html>", reason),
+    CallbackEvent::StateMismatch => "<html>State mismatch</html>".to_string(),
+    CallbackEvent::MissingCode => "<html>Missing code</html>".to_string(),
+};
+
+let code_future = run_callback_server_with_html(1455, &flow.state, html);
 ```
 
 ## Token Storage
@@ -148,6 +170,19 @@ let new_tokens = client.refresh_token(&tokens.refresh_token).await?;
 
 // Extract account ID from JWT (sync)
 let account_id = client.extract_account_id(&tokens.access_token)?;
+```
+
+### API Key Exchange (Codex CLI flow)
+
+```rust
+use openai_auth::OAuthClient;
+
+let client = OAuthClient::new(config)?;
+let flow = client.start_flow()?;
+let tokens = client.exchange_code_for_api_key(code, &flow.pkce_verifier).await?;
+
+// Use tokens.api_key for OpenAI API requests
+let api_key = tokens.api_key.as_deref();
 ```
 
 ### Blocking API

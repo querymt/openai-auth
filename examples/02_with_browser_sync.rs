@@ -7,7 +7,7 @@
 //!
 //! Run with: cargo run --example 02_with_browser_sync
 
-use openai_auth::{blocking::OAuthClient, open_browser, OAuthConfig};
+use openai_auth::{OAuthConfig, blocking::OAuthClient, open_browser};
 use std::io::{self, Write};
 
 fn main() -> anyhow::Result<()> {

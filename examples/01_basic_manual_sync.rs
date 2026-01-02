@@ -8,7 +8,7 @@
 //!
 //! Run with: cargo run --example 01_basic_manual_sync
 
-use openai_auth::{blocking::OAuthClient, OAuthConfig};
+use openai_auth::{OAuthConfig, blocking::OAuthClient};
 use std::io::{self, Write};
 
 fn main() -> anyhow::Result<()> {

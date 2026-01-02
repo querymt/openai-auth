@@ -1,4 +1,3 @@
-use oauth2::PkceCodeChallenge;
 use url::Url;
 
 use crate::types::TokenResponse;
@@ -70,11 +69,9 @@ impl OAuthClient {
     /// # }
     /// ```
     pub fn start_flow(&self) -> Result<OAuthFlow> {
-        // Generate PKCE challenge and verifier
-        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-
         // Generate random state for CSRF protection
         let state = crate::types::generate_random_state();
+        let (pkce_challenge, pkce_verifier) = crate::types::generate_pkce_pair();
 
         // Build authorization URL
         let mut url = Url::parse(&self.config.auth_url)?;
@@ -83,7 +80,7 @@ impl OAuthClient {
             .append_pair("client_id", &self.config.client_id)
             .append_pair("redirect_uri", &self.config.redirect_uri)
             .append_pair("scope", "openid profile email offline_access")
-            .append_pair("code_challenge", pkce_challenge.as_str())
+            .append_pair("code_challenge", &pkce_challenge)
             .append_pair("code_challenge_method", "S256")
             .append_pair("state", &state)
             .append_pair("id_token_add_organizations", "true")
@@ -92,7 +89,7 @@ impl OAuthClient {
 
         Ok(OAuthFlow {
             authorization_url: url.to_string(),
-            pkce_verifier: pkce_verifier.secret().to_string(),
+            pkce_verifier,
             state,
         })
     }
@@ -177,6 +174,59 @@ impl OAuthClient {
         Ok(TokenSet::from(token_response))
     }
 
+    /// Exchange an authorization code and return a TokenSet with an API key.
+    ///
+    /// This mirrors the Codex CLI flow by exchanging the `id_token` for an
+    /// OpenAI API key using the token-exchange grant.
+    pub async fn exchange_code_for_api_key(&self, code: &str, verifier: &str) -> Result<TokenSet> {
+        let mut tokens = self.exchange_code(code, verifier).await?;
+        let id_token = tokens.id_token.as_deref().ok_or_else(|| {
+            OpenAIAuthError::TokenExchange("missing id_token for api key exchange".to_string())
+        })?;
+        let api_key = self.obtain_api_key(id_token).await?;
+        tokens.api_key = Some(api_key);
+        Ok(tokens)
+    }
+
+    /// Exchange an OpenAI id_token for an API key access token.
+    pub async fn obtain_api_key(&self, id_token: &str) -> Result<String> {
+        #[derive(serde::Deserialize)]
+        struct ExchangeResponse {
+            access_token: String,
+        }
+
+        let client = reqwest::Client::new();
+        let params = [
+            (
+                "grant_type",
+                "urn:ietf:params:oauth:grant-type:token-exchange",
+            ),
+            ("client_id", &self.config.client_id),
+            ("requested_token", "openai-api-key"),
+            ("subject_token", id_token),
+            (
+                "subject_token_type",
+                "urn:ietf:params:oauth:token-type:id_token",
+            ),
+        ];
+
+        let response = client
+            .post(&self.config.token_url)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .form(&params)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let body = response.text().await.unwrap_or_default();
+            return Err(OpenAIAuthError::Http { status, body });
+        }
+
+        let exchange: ExchangeResponse = response.json().await?;
+        Ok(exchange.access_token)
+    }
+
     /// Refresh an expired access token
     ///
     /// When an access token expires, use the refresh token to obtain a new
@@ -232,7 +282,7 @@ impl OAuthClient {
         if !response.status().is_success() {
             let status = response.status().as_u16();
             let body = response.text().await.unwrap_or_default();
-            return Err(OpenAIAuthError::Http { status, body });
+            return Err(OpenAIAuthError::ApiKeyExchange { status, body });
         }
 
         let token_response: TokenResponse = response.json().await?;

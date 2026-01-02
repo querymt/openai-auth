@@ -27,8 +27,11 @@ pub enum OpenAIAuthError {
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
 
-    #[error("HTTP error: {status}")]
+    #[error("HTTP error: {status}: {body}")]
     Http { status: u16, body: String },
+
+    #[error("API key exchange failed: {status}: {body}")]
+    ApiKeyExchange { status: u16, body: String },
 
     #[error("OAuth error: {0}")]
     OAuth(String),

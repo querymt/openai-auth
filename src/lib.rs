@@ -14,6 +14,7 @@
 //! - **Browser Integration**: Auto-open browser for authorization (default)
 //! - **Callback Server**: Local server for automatic callback handling (optional, requires tokio)
 //! - **JWT Utilities**: Extract ChatGPT account ID from access tokens
+//! - **API Key Exchange**: Exchange id_token for OpenAI API key (Codex CLI flow)
 //!
 //! ## Quick Start (Async API)
 //!
@@ -79,4 +80,4 @@ pub use client::OAuthClient;
 pub use browser::open_browser;
 
 #[cfg(feature = "callback-server")]
-pub use server::run_callback_server;
+pub use server::{CallbackEvent, run_callback_server, run_callback_server_with_html};

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// OAuth token set containing access token, refresh token, and expiration info
@@ -6,10 +7,16 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub struct TokenSet {
     /// The access token used to authenticate API requests
     pub access_token: String,
+    /// The ID token returned by OpenAI (used for API key exchange)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id_token: Option<String>,
     /// The refresh token used to obtain new access tokens
     pub refresh_token: String,
     /// Unix timestamp (seconds) when the access token expires
     pub expires_at: u64,
+    /// OpenAI API key derived from token exchange
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
 }
 
 impl TokenSet {
@@ -139,6 +146,7 @@ impl OAuthConfigBuilder {
 #[derive(Debug, Deserialize)]
 pub(crate) struct TokenResponse {
     pub access_token: String,
+    pub id_token: Option<String>,
     pub refresh_token: Option<String>,
     pub expires_in: Option<u64>,
 }
@@ -153,17 +161,31 @@ impl From<TokenResponse> for TokenSet {
 
         TokenSet {
             access_token: response.access_token,
+            id_token: response.id_token,
             refresh_token: response.refresh_token.unwrap_or_default(),
             expires_at,
+            api_key: None,
         }
     }
 }
 
 /// Generate a random state string for CSRF protection
 pub(crate) fn generate_random_state() -> String {
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::{Engine as _, engine::general_purpose};
     use rand::Rng;
 
-    let random_bytes: Vec<u8> = (0..32).map(|_| rand::thread_rng().gen()).collect();
+    let random_bytes: Vec<u8> = (0..32).map(|_| rand::thread_rng().r#gen()).collect();
     general_purpose::URL_SAFE_NO_PAD.encode(&random_bytes)
+}
+
+pub(crate) fn generate_pkce_pair() -> (String, String) {
+    use base64::{Engine as _, engine::general_purpose};
+    use rand::RngCore;
+
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    let verifier = general_purpose::URL_SAFE_NO_PAD.encode(bytes);
+    let digest = Sha256::digest(verifier.as_bytes());
+    let challenge = general_purpose::URL_SAFE_NO_PAD.encode(digest);
+    (challenge, verifier)
 }
